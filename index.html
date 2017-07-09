@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Dungeon V2</title>
+    <meta charset="UTF-8"></meta>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="map"></canvas>
+
+    <script src="generator.js"></script>
+    <script>
+      var generator = window.generator || {};
+      var canvasElement =document.getElementById('map');
+
+      window.__DEV__ = true;
+
+      generator.attatch(canvasElement);
+      generator.start();
+    </script>
+  </body>
+</html>
