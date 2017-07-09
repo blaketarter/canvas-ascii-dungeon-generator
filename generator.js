@@ -22,8 +22,8 @@
   const mapMeta = {
     blockCount: 0,
     blockSize: 0,
-    xBlocks: 0,
-    yBlocks: 0,
+    rows: 0,
+    columns: 0,
     xOffset: 0,
     yOffset: 0,
   };
@@ -69,75 +69,51 @@
     ctx.fillRect(0, 0, width, height);
   }
 
-  function getIndex(x, y, meta) {
-    return x + (y * meta.yBlocks)
+  function getIndex(row, column, meta) {
+    return column + (row * meta.columns);
   }
 
-  function getRowFromIndex(index, meta) {
-
+  function getRealX(column, meta) {
+    return (column * meta.blockSize) + meta.xOffset;
   }
 
-  function getColumnFromIndex(index, meta) {
-    return meta.xBlocks - (index - (Math.floor(index / meta.yBlocks) * meta.yBlocks)) - 1;
+  function getRealY(row, meta) {
+    return (row * meta.blockSize) + meta.yOffset;
   }
 
-  function getRealX(x, meta) {
-    return (x * meta.blockSize) + meta.xOffset;
-  }
-
-  function getRealY(y, meta) {
-    return (y * meta.blockSize) + meta.yOffset;
-  }
-
-  function getDirectionFromIndex(startIndex, endIndex, meta) {
-    if (startIndex > endIndex) {
-      if (Math.floor(startIndex / meta.yBlocks) === Math.floor(endIndex / meta.yBlocks)) {
-        return 'LEFT';
-      }
-      return 'UP';
-    }
-
-    if (Math.floor(startIndex / meta.yBlocks) === Math.floor(endIndex / meta.yBlocks)) {
-      return 'RIGHT';
-    }
-    return 'DOWN';
-  }
-
-  function getDirectionFromXY(xFrom, yFrom, xTo, yTo, meta) {
-    if (xFrom === xTo) { // LEFT or RIGHT
-      if (yFrom > yTo) {
-        return 'LEFT';
-      }
-
-      return 'RIGHT';
-    } else if (yFrom === yTo) { // UP or DOWN
-      if (xFrom > xTo) {
+  function getDirectionFromRowColumn(columnFrom, rowFrom, columnTo, rowTo, meta) {
+    if (columnFrom === columnTo) { // UP or DOWN
+      if (rowFrom > rowTo) {
         return 'UP';
       }
 
       return 'DOWN';
+    } else if (rowFrom === rowTo) { // LEFT or RIGHT
+      if (columnFrom > columnTo) {
+        return 'LEFT';
+      }
+
+      return 'RIGHT';
     }
 
-    log(`INVALID direction for directionFromIndex ${xFrom},${yFrom} to ${xTo},${yTo}`);
+    log(`INVALID direction for directionFromIndex ${columnFrom},${rowFrom} to ${columnTo},${rowTo}`);
     return 'INVALID';
   }
 
-  window.getDirectionFromIndex = getDirectionFromIndex;
-
   function initMap(height, width, blockSize, meta) {
-    const xBlocks = (width / blockSize);
-    const yBlocks = (height / blockSize);
-    const blockCount = xBlocks * yBlocks;
+    const columns = (width / blockSize);
+    const rows = (height / blockSize);
+    const blockCount = rows * columns;
 
-    mapMeta.xBlocks = xBlocks;
-    mapMeta.yBlocks = yBlocks;
+    mapMeta.columns = columns;
+    mapMeta.rows = rows;
     mapMeta.blockSize = blockSize;
     mapMeta.blockCount = blockCount;
 
-    for (let y = 0; y < yBlocks; y++) {
-      for (let x = 0; x < xBlocks; x++) {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < columns; c++) {
         map.push(
-          initMapCell(x, y, blockSize, getIndex(x, y, meta))
+          initMapCell(r, c, blockSize, meta)
         );
       }
     }
@@ -148,12 +124,12 @@
     log('mapMeta', mapMeta);
   }
 
-  function initMapCell(x, y, blockSize, index) {
+  function initMapCell(row, column, size, meta) {
     return {
-      x,
-      y,
-      size: blockSize,
-      index,
+      row,
+      column,
+      size,
+      index: getIndex(row, column, meta),
       type: 'GROUND',
     };
   }
@@ -175,8 +151,8 @@
       drawCell(
         // cellTypes[cell.type].letter,
         cell.index,
-        cell.x,
-        cell.y,
+        cell.column,
+        cell.row,
         cellTypes[cell.type].color,
         meta,
         ctx
@@ -184,9 +160,9 @@
     });
   }
 
-  function drawCell(letter, x, y, color, meta, ctx) {
-    const realX = getRealX(x, meta);
-    const realY = getRealY(y, meta);
+  function drawCell(letter, column, row, color, meta, ctx) {
+    const realX = getRealX(column, meta);
+    const realY = getRealY(row, meta);
 
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
@@ -197,16 +173,11 @@
     }
   }
 
-  function drawLineWithXY(xFrom, yFrom, xTo, yTo, cellType, map, meta) {
-    const startIndex = getIndex(xFrom, yFrom, meta);
-    const endIndex = getIndex(xTo, yTo, meta);
-
-    drawLineWithIndex(startIndex, endIndex, cellType, map, meta);
-  }
-
-  function drawLineWithIndex(startIndex, endIndex, cellType, map, meta) {
-    const dir = getDirectionFromIndex(startIndex, endIndex, meta);
-
+  function drawLineWithRowColumn(columnFrom, rowFrom, columnTo, rowTo, cellType, map, meta) {
+    const startIndex = getIndex(rowFrom, columnFrom, meta);
+    const endIndex = getIndex(rowTo, columnTo, meta);
+    const dir = getDirectionFromRowColumn(columnFrom, rowFrom, columnTo, rowTo, meta);
+    
     switch (dir) {
       case 'UP':
         drawLineUp(startIndex, endIndex, cellType, map, meta);
@@ -226,7 +197,7 @@
   function drawLineUp(startIndex, endIndex, cellType, map, meta) {
     log(`drawing line UP from ${startIndex} to ${endIndex} of cell type ${cellType}`);
 
-    for (let i = endIndex; i <= startIndex; i += meta.yBlocks) {
+    for (let i = endIndex; i <= startIndex; i += meta.columns) {
       map[i].type = cellType;
     }
   }
@@ -234,7 +205,7 @@
   function drawLineDown(startIndex, endIndex, cellType, map, meta) {
     log(`drawing line DOWN from ${startIndex} to ${endIndex} of cell type ${cellType}`);
 
-    for (let i = startIndex; i <= endIndex; i += meta.yBlocks) {
+    for (let i = startIndex; i <= endIndex; i += meta.columns) {
       map[i].type = cellType;
     }
   }
@@ -267,7 +238,12 @@
       getScreenSize(window);
       setupCanvas(canvasElement, canvasContext, screen.height, screen.width, options.background, options.blockSize);
       initMap(options.size.height, options.size.width, options.blockSize, mapMeta);
-      drawLineWithIndex(50, 55, 'PATH', map, mapMeta);
+
+      const from = map[8];
+      const to = map[13];
+
+      log(getDirectionFromRowColumn(from.column, from.row, to.column, to.row, mapMeta));
+      drawLineWithRowColumn(from.column, from.row, to.column, to.row, 'PATH', map, mapMeta);
       drawMap(map, mapMeta, canvasContext);
 
       console.timeEnd('start');
