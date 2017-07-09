@@ -13,8 +13,8 @@
       height: 500,
       width: 400,
     },
-    blockSize: 50,
-    fontScale: 0.5,
+    blockSize: 25,
+    fontScale: 1,
   };
 
   const map = [];
@@ -31,15 +31,25 @@
   const cellTypes = {
     GROUND: {
       letter: '%',
-      color: 'grey'
+      color: 'grey',
+      isAnimated: false,
     },
     WALL: {
       letter: '#',
-      color: 'darkblue',
+      color: 'darkslategray',
+      isAnimated: false,
     },
     PATH: {
       letter: '/',
-      color: 'lightgreen',
+      color: 'lightslategray',
+      isAnimated: false,
+    },
+    WATER: {
+      letter: '^',
+      color: 'blue',
+      isAnimated: true,
+      steps: ['^', '~', '-'],
+      framesPerStep: 30,
     }
   };
 
@@ -50,6 +60,18 @@
   function log(...messages) {
     if (window.__DEV__) {
       console.log(...messages);
+    }
+  }
+
+  function time(...messages) {
+    if (window.__DEV__) {
+      console.time(...messages);
+    }
+  }
+
+  function timeEnd(...messages) {
+    if (window.__DEV__) {
+      console.timeEnd(...messages);
     }
   }
 
@@ -131,6 +153,8 @@
       size,
       index: getIndex(row, column, meta),
       type: 'GROUND',
+      animationStep: 0,
+      animationStepCounter: 0,
     };
   }
 
@@ -148,15 +172,25 @@
     log('ctx', ctx);
 
     map.forEach(cell => {
-      drawCell(
-        // cellTypes[cell.type].letter,
-        cell.index,
-        cell.column,
-        cell.row,
-        cellTypes[cell.type].color,
-        meta,
-        ctx
-      );
+      if (window.__DEBUG__) {
+        drawCell(
+          cell.index,
+          cell.column,
+          cell.row,
+          cellTypes[cell.type].color,
+          meta,
+          ctx
+        );
+      } else {
+        drawCell(
+          cellTypes[cell.type].letter,
+          cell.column,
+          cell.row,
+          cellTypes[cell.type].color,
+          meta,
+          ctx
+        );
+      }
     });
   }
 
@@ -171,6 +205,42 @@
     if (window.__DEBUG__) {
       ctx.strokeRect(realX, realY, meta.blockSize, meta.blockSize);
     }
+  }
+
+  function drawBoxWithRowColumn(columnFrom, rowFrom, columnTo, rowTo, cellType, map, meta) {
+    let startIndex = getIndex(rowFrom, columnFrom, meta);
+    let endIndex = getIndex(rowTo, columnTo, meta);
+    let a, b, c, d;
+
+    if (rowFrom > rowTo && columnFrom > columnTo) {
+      a = getIndex(rowTo, columnTo, meta);        // A(end)------B
+      b = getIndex(rowTo, columnFrom, meta);      // |           |
+      c = getIndex(rowFrom, columnFrom, meta);    // |           |
+      d = getIndex(rowFrom, columnTo, meta);      // D-----------C(start)
+    } else if (rowFrom < rowTo && columnFrom < columnTo) {
+      a = getIndex(rowFrom, columnFrom, meta);    // A(start)----B
+      b = getIndex(rowFrom, columnTo, meta);      // |           |
+      c = getIndex(rowTo, columnTo, meta);        // |           |
+      d = getIndex(rowTo, columnFrom, meta);      // D-----------C(end)
+    } else if (rowFrom < rowTo && columnFrom > columnTo) {
+      a = getIndex(rowFrom, columnTo, meta);      // A-----------B(start)
+      b = getIndex(rowFrom, columnFrom, meta);    // |           |
+      c = getIndex(rowTo, columnFrom, meta);      // |           |
+      d = getIndex(rowTo, columnTo, meta);        // D(end)------C
+    } else if (rowFrom > rowTo && columnFrom < columnTo) {
+      a = getIndex(rowTo, columnFrom, meta);      // A-----------B(end)
+      b = getIndex(rowTo, columnTo, meta);        // |           |
+      c = getIndex(rowFrom, columnTo, meta);      // |           |
+      d = getIndex(rowFrom, columnFrom, meta);    // D(start)----C
+    } 
+
+    log(`Drawing box from ${startIndex} to ${endIndex}`);
+    log(`A - ${a}, B - ${b}, C - ${c}, D - ${d}`)
+
+    drawLineRight(a, b, cellType, map, meta);
+    drawLineDown(b, c, cellType, map, meta);
+    drawLineLeft(c, d, cellType, map, meta);
+    drawLineUp(d, a, cellType, map, meta);
   }
 
   function drawLineWithRowColumn(columnFrom, rowFrom, columnTo, rowTo, cellType, map, meta) {
@@ -234,19 +304,26 @@
       log('attatched!');
     },
     start: function start() {
-      console.time('start');
+      if (window.__DEBUG__) {
+        options.fontScale = 0.5;
+      }
+
+      time('start');
       getScreenSize(window);
       setupCanvas(canvasElement, canvasContext, screen.height, screen.width, options.background, options.blockSize);
       initMap(options.size.height, options.size.width, options.blockSize, mapMeta);
 
-      const from = map[8];
-      const to = map[13];
+      const boxFrom = map[74];
+      const boxTo = map[116];
 
-      log(getDirectionFromRowColumn(from.column, from.row, to.column, to.row, mapMeta));
-      drawLineWithRowColumn(from.column, from.row, to.column, to.row, 'PATH', map, mapMeta);
+      const lineFrom = map[77];
+      const lineTo = map[189];
+
+      drawLineWithRowColumn(lineFrom.column, lineFrom.row, lineTo.column, lineTo.row, 'PATH', map, mapMeta);
+      drawBoxWithRowColumn(boxFrom.column, boxFrom.row, boxTo.column, boxTo.row, 'WALL', map, mapMeta);
       drawMap(map, mapMeta, canvasContext);
 
-      console.timeEnd('start');
+      timeEnd('start');
       log('started!');
     }
   };
