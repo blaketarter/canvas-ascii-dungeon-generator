@@ -15,6 +15,9 @@
     },
     blockSize: 25,
     fontScale: 1,
+    fpsInterval: 1000,
+    then: null,
+    now: null,
   };
 
   const map = [];
@@ -30,27 +33,57 @@
 
   const cellTypes = {
     GROUND: {
-      letter: '%',
+      letter: '_',
       color: 'grey',
       isAnimated: false,
+      isPassable: true,
+    },
+    FLOOR: {
+      letter: '*',
+      color: 'grey',
+      isAnimated: false,
+      isPassable: true,
     },
     WALL: {
       letter: '#',
       color: 'darkslategray',
       isAnimated: false,
+      isPassable: false,
     },
     PATH: {
       letter: '/',
-      color: 'lightslategray',
+      color: 'grey',
       isAnimated: false,
+      isPassable: true,
     },
     WATER: {
-      letter: '^',
-      color: 'blue',
+      letter: '-',
+      color: 'lightslategray',
       isAnimated: true,
-      steps: ['^', '~', '-'],
-      framesPerStep: 30,
+      steps: ['-', '-', '~'],
+      framesPerStep: 25,
+      startOnRandomStep: true,
+      isPassable: false,
+    },
+    LAVA: {
+      letter: '-',
+      color: 'orangered',
+      isAnimated: true,
+      steps: ['-', '-', '~', '˚', '-', '-', '~'],
+      framesPerStep: 15,
+      startOnRandomStep: true,
+      isPassable: false,
+    },
+    PLAYER: {
+      letter: 'Ϙ',
+      color: 'green',
+      isAnimated: false,
+      isPassable: true,
     }
+  };
+
+  const player = {
+    cell: null,
   };
 
   function getCanvasContext(canvasElement) {
@@ -73,6 +106,10 @@
     if (window.__DEV__) {
       console.timeEnd(...messages);
     }
+  }
+
+  function randomBetween(from, to) {
+    return Math.floor(Math.random() * (to - from + 1) + from);
   }
 
   function getScreenSize(parent) {
@@ -155,6 +192,10 @@
       type: 'GROUND',
       animationStep: 0,
       animationStepCounter: 0,
+      isAnimated: false,
+      isOccupied: false,
+      isPlayerOccupied: false,
+      shouldRedraw: false,
     };
   }
 
@@ -179,35 +220,52 @@
           cell.row,
           cellTypes[cell.type].color,
           meta,
-          ctx
+          ctx,
+          cell,
         );
       } else {
         drawCell(
-          cellTypes[cell.type].letter,
+          cell.isAnimated ? cellTypes[cell.type].steps[cell.animationStep] : cellTypes[cell.type].letter,
           cell.column,
           cell.row,
           cellTypes[cell.type].color,
           meta,
-          ctx
+          ctx,
+          cell,
         );
       }
     });
   }
 
-  function drawCell(letter, column, row, color, meta, ctx) {
+  function drawCell(letter, column, row, color, meta, ctx, cell) {
     const realX = getRealX(column, meta);
     const realY = getRealY(row, meta);
 
-    ctx.fillStyle = color;
-    ctx.strokeStyle = color;
-    ctx.fillText(letter, realX + (meta.blockSize / 2), realY + (meta.blockSize / 2));
+    if (cell.isPlayerOccupied) {
+      ctx.fillStyle = cellTypes['PLAYER'].color;
+      ctx.strokeStyle = cellTypes['PLAYER'].color;
+      ctx.fillText(cellTypes['PLAYER'].letter, realX + (meta.blockSize / 2), realY + (meta.blockSize / 2));
+    } else {
+      ctx.fillStyle = color;
+      ctx.strokeStyle = color;
+      ctx.fillText(letter, realX + (meta.blockSize / 2), realY + (meta.blockSize / 2));
+    }
 
     if (window.__DEBUG__) {
       ctx.strokeRect(realX, realY, meta.blockSize, meta.blockSize);
     }
   }
 
-  function drawBoxWithRowColumn(columnFrom, rowFrom, columnTo, rowTo, cellType, map, meta) {
+  function clearCell(column, row, options, meta, ctx) {
+    const realX = getRealX(column, meta);
+    const realY = getRealY(row, meta);
+
+    ctx.fillStyle = options.background;
+    ctx.clearRect(realX, realY, meta.blockSize, meta.blockSize);
+    ctx.fillRect(realX - 1, realY - 1, meta.blockSize + 2, meta.blockSize + 2);
+  }
+
+  function drawBoxWithRowColumn(columnFrom, rowFrom, columnTo, rowTo, cellType, shouldFill, map, meta) {
     let startIndex = getIndex(rowFrom, columnFrom, meta);
     let endIndex = getIndex(rowTo, columnTo, meta);
     let a, b, c, d;
@@ -235,12 +293,26 @@
     } 
 
     log(`Drawing box from ${startIndex} to ${endIndex}`);
-    log(`A - ${a}, B - ${b}, C - ${c}, D - ${d}`)
+    log(`A - ${a}, B - ${b}, C - ${c}, D - ${d}`);
 
-    drawLineRight(a, b, cellType, map, meta);
-    drawLineDown(b, c, cellType, map, meta);
-    drawLineLeft(c, d, cellType, map, meta);
-    drawLineUp(d, a, cellType, map, meta);
+    if (!shouldFill) {
+      drawLineRight(a, b, cellType, map, meta);
+      drawLineDown(b, c, cellType, map, meta);
+      drawLineLeft(c, d, cellType, map, meta);
+      drawLineUp(d, a, cellType, map, meta);
+    } else {
+      let pointerA = a;
+      let pointerB = b;
+
+      while (pointerA !== d) {
+        drawLineRight(pointerA, pointerB, cellType, map, meta);
+
+        pointerA += meta.columns;
+        pointerB += meta.columns;
+      }
+
+      drawLineRight(d, c, cellType, map, meta);
+    }
   }
 
   function drawLineWithRowColumn(columnFrom, rowFrom, columnTo, rowTo, cellType, map, meta) {
@@ -264,11 +336,19 @@
     }
   }
 
+  function setCell(cell, newCellType) {
+    cell.type = newCellType;
+
+    if (cellTypes[newCellType].isAnimated) {
+      initAnimatedCell(cell);
+    }
+  }
+
   function drawLineUp(startIndex, endIndex, cellType, map, meta) {
     log(`drawing line UP from ${startIndex} to ${endIndex} of cell type ${cellType}`);
 
     for (let i = endIndex; i <= startIndex; i += meta.columns) {
-      map[i].type = cellType;
+      setCell(map[i], cellType);
     }
   }
 
@@ -276,7 +356,7 @@
     log(`drawing line DOWN from ${startIndex} to ${endIndex} of cell type ${cellType}`);
 
     for (let i = startIndex; i <= endIndex; i += meta.columns) {
-      map[i].type = cellType;
+      setCell(map[i], cellType);
     }
   }
 
@@ -284,7 +364,7 @@
     log(`drawing line LEFT from ${startIndex} to ${endIndex} of cell type ${cellType}`);
 
     for (let i = startIndex; i >= endIndex; i--) {
-      map[i].type = cellType;
+      setCell(map[i], cellType);
     }
   }
 
@@ -292,8 +372,89 @@
     log(`drawing line RIGHT from ${startIndex} to ${endIndex} of cell type ${cellType}`);
 
     for (let i = startIndex; i <= endIndex; i++) {
-      map[i].type = cellType;
+      setCell(map[i], cellType);
     }
+  }
+
+  function initAnimatedCell(cell) {
+    const animatedCellType = cellTypes[cell.type];
+    cell.animationStepCounter = animatedCellType.framesPerStep;
+    cell.isAnimated = true;
+
+    if (animatedCellType.startOnRandomStep) {
+      const randomStep = randomBetween(0, animatedCellType.steps.length - 1);
+      cell.animationStep = randomStep;
+    }
+  }
+
+  function step(timestamp) {
+    requestAnimationFrame(step);
+
+    options.now = timestamp;
+    let elapsed = options.now - options.then;
+
+    if (elapsed > options.fpsInterval) {
+      options.then = options.now - (elapsed % options.fpsInterval);
+
+      if (window.__DEBUG__) {
+        time('draw');
+      }
+
+      draw(map);
+
+      if (window.__DEBUG__) {
+        timeEnd('draw');
+      }
+    }
+  }
+
+  function draw() {
+    map
+      .filter(cell => cell.isAnimated || cell.shouldRedraw || cell.isOccupied)
+      .forEach(cell => {
+        if (cell.shouldRedraw) {
+          clearCell(cell.column, cell.row, options, mapMeta, canvasContext);
+          drawCell(cellTypes[cell.type].letter, cell.column, cell.row, cellTypes[cell.type].color, mapMeta, canvasContext, cell);
+          cell.shouldRedraw = false;
+          return;
+        }
+
+        if (cell.isOccupied && cell.isPlayerOccupied) {
+          clearCell(cell.column, cell.row, options, mapMeta, canvasContext);
+          drawCell(cellTypes[cell.type].letter, cell.column, cell.row, cellTypes[cell.type].color, mapMeta, canvasContext, cell);
+          return;
+        }
+
+        if (cell.animationStepCounter <= 0) {
+          cell.animationStep += 1;
+
+          if (cell.animationStep >= cellTypes[cell.type].steps.length) {
+            cell.animationStep = 0;
+          }
+
+          cell.letter = cellTypes[cell.type].steps[cell.animationStep];
+
+          clearCell(cell.column, cell.row, options, mapMeta, canvasContext);
+          drawCell(cell.letter, cell.column, cell.row, cellTypes[cell.type].color, mapMeta, canvasContext, cell);
+
+          cell.animationStepCounter = cellTypes[cell.type].framesPerStep;
+        } else {
+          cell.animationStepCounter -= 1;
+        }
+      });
+  }
+
+  function movePlayer(toCell) {
+    if (player.cell) {
+      player.cell.isOccupied = false;
+      player.cell.isPlayerOccupied = false;
+      player.cell.shouldRedraw = true;
+    }
+
+    player.cell = toCell;
+
+    player.cell.isOccupied = true;
+    player.cell.isPlayerOccupied = true;
   }
 
   const generator = {
@@ -303,7 +464,7 @@
 
       log('attatched!');
     },
-    start: function start() {
+    generate: function start() {
       if (window.__DEBUG__) {
         options.fontScale = 0.5;
       }
@@ -319,13 +480,31 @@
       const lineFrom = map[77];
       const lineTo = map[189];
 
+      const waterFrom = map[147];
+      const waterTo = map[203];
+
+      const lavaFrom = map[246];
+      const lavaTo = map[301];
+
       drawLineWithRowColumn(lineFrom.column, lineFrom.row, lineTo.column, lineTo.row, 'PATH', map, mapMeta);
-      drawBoxWithRowColumn(boxFrom.column, boxFrom.row, boxTo.column, boxTo.row, 'WALL', map, mapMeta);
+      drawBoxWithRowColumn(boxFrom.column, boxFrom.row, boxTo.column, boxTo.row, 'FLOOR', true, map, mapMeta);
+      drawBoxWithRowColumn(boxFrom.column, boxFrom.row, boxTo.column, boxTo.row, 'WALL', false, map, mapMeta);
+      drawBoxWithRowColumn(waterFrom.column, waterFrom.row, waterTo.column, waterTo.row, 'WATER', true, map, mapMeta);
+      drawBoxWithRowColumn(lavaFrom.column, lavaFrom.row, lavaTo.column, lavaTo.row, 'LAVA', true, map, mapMeta);
+
+      movePlayer(map[18]);
+
+      // initAnimatedCells(map);
       drawMap(map, mapMeta, canvasContext);
 
       timeEnd('start');
       log('started!');
-    }
+    },
+    animate: function animate(fps) {
+      options.fpsInterval = 1000 / fps;
+      options.then = window.performance.now();
+      step();
+    },
   };
 
   if (!window.generator) {
