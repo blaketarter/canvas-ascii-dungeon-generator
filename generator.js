@@ -124,6 +124,14 @@
     },
   };
 
+  const WEAPON_CELLS = {
+    EMPTY_ATTACK: {
+      framesPerStep: 2,
+      steps: ['˟', '•'],
+      color: 'silver',
+    }
+  };
+
   const ACTIONS = {
     OPEN_DOOR: {
       matchingCellType: 'DOOR',
@@ -203,6 +211,19 @@
     }
 
     return map[sourceCell.index - mapMeta.columns];
+  }
+
+  function getCellInFrontOfPlayer() {
+    switch (player.direction) {
+      case 'UP':
+        return getCellUp(player.cell);
+      case 'DOWN':
+        return getCellDown(player.cell);
+      case 'LEFT':
+        return getCellLeft(player.cell);
+      case 'RIGHT':
+        return getCellRight(player.cell);
+    }
   }
 
   function getCellDown(sourceCell) {
@@ -289,6 +310,10 @@
       isPlayerOccupied: false,
       shouldRedraw: false,
       state: null,
+      hasAnimatedObject: false,
+      animatedObjectType: null,
+      // animatedObjectStep: 0,
+      // animatedObjectCounter: 0,
     };
   }
 
@@ -345,16 +370,24 @@
         ctx.fillText(LAYER_CELLS[player.direction].letter, realX + (meta.blockSize / 2), realY + (meta.blockSize / 2));
       }
     } else {
+      let cellType;
+
+      if (cell.hasAnimatedObject) {
+        cellType = WEAPON_CELLS[cell.animatedObjectType];
+      } else {
+        cellType = cellTypes[cell.type];
+      }
+
       ctx.fillStyle = color;
       ctx.strokeStyle = color;
 
-      if (cellTypes[cell.type].letterOptions && cellTypes[cell.type].letterOptions.length) {
+      if (cellType.letterOptions && cellType.letterOptions.length) {
         ctx.fillText(
-          cellTypes[cell.type].letterOptions[randomBetween(0, cellTypes[cell.type].letterOptions.length - 1)],
+          cellType.letterOptions[randomBetween(0, cellType.letterOptions.length - 1)],
           realX + (meta.blockSize / 2), realY + (meta.blockSize / 2)
         );
-      } else if (cellTypes[cell.type].hasState) {
-        ctx.fillText(cellTypes[cell.type].states[cell.state].letter, realX + (meta.blockSize / 2), realY + (meta.blockSize / 2));
+      } else if (cellType.hasState) {
+        ctx.fillText(cellType.states[cell.state].letter, realX + (meta.blockSize / 2), realY + (meta.blockSize / 2));
       } else {
         ctx.fillText(letter, realX + (meta.blockSize / 2), realY + (meta.blockSize / 2));
       }
@@ -534,19 +567,31 @@
           return;
         }
 
-        if (cell.animationStepCounter <= 0) {
-          cell.animationStep += 1;
+        let animatedObject;
 
-          if (cell.animationStep >= cellTypes[cell.type].steps.length) {
+        if (cell.hasAnimatedObject) {
+          animatedObject = WEAPON_CELLS[cell.animatedObjectType];
+        } else {
+          animatedObject = cellTypes[cell.type];
+        }
+
+        if (cell.animationStepCounter <= 0) {
+          if (cell.animationStep >= animatedObject.steps.length) {
             cell.animationStep = 0;
           }
 
-          cell.letter = cellTypes[cell.type].steps[cell.animationStep];
+          cell.letter = animatedObject.steps[cell.animationStep];
 
           clearCell(cell.column, cell.row, options, mapMeta, canvasContext);
-          drawCell(cell.letter, cell.column, cell.row, cellTypes[cell.type].color, mapMeta, canvasContext, cell);
+          drawCell(cell.letter, cell.column, cell.row, animatedObject.color, mapMeta, canvasContext, cell);
 
-          cell.animationStepCounter = cellTypes[cell.type].framesPerStep;
+          cell.animationStepCounter = animatedObject.framesPerStep;
+
+          cell.animationStep += 1;
+          
+          if (cell.hasAnimatedObject && cell.animationStep >= animatedObject.steps.length) {
+            unsetAnimatedObject(cell);
+          }
         } else {
           cell.animationStepCounter -= 1;
         }
@@ -633,7 +678,7 @@
       movePlayer(nextCell);
     }
   }
-  
+
   function movePlayerLeft() {
     if (player.direction !== 'LEFT') {
       player.direction = 'LEFT';
@@ -679,27 +724,63 @@
 
     const surroundingCells = [];
 
-    switch (player.direction) {
-      case 'UP':
-        surroundingCells.push(getCellUp(playerCell));
-        break;
-      case 'DOWN':
-        surroundingCells.push(getCellDown(playerCell));
-        break;
-      case 'LEFT':
-        surroundingCells.push(getCellLeft(playerCell));
-        break;
-      case 'RIGHT':
-        surroundingCells.push(getCellRight(playerCell));
-        break;
-    }
+    // switch (player.direction) {
+    //   case 'UP':
+    //     surroundingCells.push(getCellUp(playerCell));
+    //     break;
+    //   case 'DOWN':
+    //     surroundingCells.push(getCellDown(playerCell));
+    //     break;
+    //   case 'LEFT':
+    //     surroundingCells.push(getCellLeft(playerCell));
+    //     break;
+    //   case 'RIGHT':
+    //     surroundingCells.push(getCellRight(playerCell));
+    //     break;
+    // }
+
+    surroundingCells.push(getCellInFrontOfPlayer());
 
     const actionCells = surroundingCells
       .filter(cell => cellTypes[cell.type].isActionable)
-      .forEach(cell => {
+      .map(cell => {
         const action = getMatchingAction(cell);
         performAction(cell, action);
+        return cell;
       });
+    
+    if (!actionCells.length) {
+      return emptyAttack();
+    }
+  }
+
+  function emptyAttack() {
+    const cellInFrontOfPlayer = getCellInFrontOfPlayer();
+
+    if (!cellTypes[cellInFrontOfPlayer.type].isPassable || cellInFrontOfPlayer.isOccupied) {
+      return;
+    }
+
+    log('empty attack');
+
+    setAnimatedObjectType(cellInFrontOfPlayer, 'EMPTY_ATTACK');
+  }
+
+  function setAnimatedObjectType(cell, type) {
+    cell.hasAnimatedObject = true;
+    cell.isAnimated = true;
+    cell.animatedObjectType = type;
+    cell.animationStep = 0;
+    cell.animationStepCounter = WEAPON_CELLS[type].framesPerStep;
+  }
+
+  function unsetAnimatedObject(cell) {
+    cell.hasAnimatedObject = false;
+    cell.isAnimated = false;
+    cell.animatedObjectType = null;
+    cell.animationStep = 0;
+    cell.animationStepCounter = 0;
+    cell.shouldRedraw = true;
   }
 
   function getMatchingAction(cell) {
