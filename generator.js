@@ -105,6 +105,25 @@
     }
   };
 
+  const LAYER_CELLS = {
+    UP: {
+      letter: '↑',
+      color: 'white',
+    },
+    DOWN: {
+      letter: '↓',
+      color: 'white',
+    },
+    LEFT: {
+      letter: '←',
+      color: 'white',
+    },
+    RIGHT: {
+      letter: '→',
+      color: 'white',
+    },
+  };
+
   const ACTIONS = {
     OPEN_DOOR: {
       matchingCellType: 'DOOR',
@@ -120,6 +139,7 @@
 
   const player = {
     cell: null,
+    direction: 'RIGHT',
   };
 
   function getCanvasContext(canvasElement) {
@@ -318,6 +338,12 @@
       ctx.fillStyle = cellTypes['PLAYER'].color;
       ctx.strokeStyle = cellTypes['PLAYER'].color;
       ctx.fillText(cellTypes['PLAYER'].letter, realX + (meta.blockSize / 2), realY + (meta.blockSize / 2));
+      
+      if (player.direction) {
+        ctx.fillStyle = LAYER_CELLS[player.direction].color;
+        ctx.strokeStyle = LAYER_CELLS[player.direction].color;
+        ctx.fillText(LAYER_CELLS[player.direction].letter, realX + (meta.blockSize / 2), realY + (meta.blockSize / 2));
+      }
     } else {
       ctx.fillStyle = color;
       ctx.strokeStyle = color;
@@ -528,8 +554,18 @@
   }
 
   function movePlayer(toCell) {
-    if (!cellTypes[toCell.type].isPassable) {
+    if (!toCell.state && !cellTypes[toCell.type].isPassable) {
       log('not passable');
+      return;
+    }
+
+    if (
+      toCell.state &&
+      cellTypes[toCell.type].states[toCell.state] &&
+      typeof cellTypes[toCell.type].states[toCell.state].isPassable === 'boolean'
+      && !cellTypes[toCell.type].states[toCell.state].isPassable
+    ) {
+      log('not passable because of state');
       return;
     }
 
@@ -571,6 +607,11 @@
   }
 
   function movePlayerUp() {
+    if (player.direction !== 'UP') {
+      player.direction = 'UP';
+      return;
+    }
+
     const currentCell = player.cell;
     const nextCell = getCellUp(currentCell);
 
@@ -580,6 +621,11 @@
   }
 
   function movePlayerDown() {
+    if (player.direction !== 'DOWN') {
+      player.direction = 'DOWN';
+      return;
+    }
+
     const currentCell = player.cell;
     const nextCell = getCellDown(currentCell);
 
@@ -587,7 +633,13 @@
       movePlayer(nextCell);
     }
   }
+  
   function movePlayerLeft() {
+    if (player.direction !== 'LEFT') {
+      player.direction = 'LEFT';
+      return;
+    }
+
     const currentCell = player.cell;
     const nextCell = getCellLeft(currentCell);
 
@@ -595,7 +647,13 @@
       movePlayer(nextCell);
     }
   }
+
   function movePlayerRight() {
+    if (player.direction !== 'RIGHT') {
+      player.direction = 'RIGHT';
+      return;
+    }
+
     const currentCell = player.cell;
     const nextCell = getCellRight(currentCell);
 
@@ -612,12 +670,29 @@
 
   function genericAction() {
     const playerCell = player.cell;
-    const surroundingCells = [
-      getCellUp(playerCell),
-      getCellDown(playerCell),
-      getCellLeft(playerCell),
-      getCellRight(playerCell),
-    ];
+    // const surroundingCells = [
+    //   getCellUp(playerCell),
+    //   getCellDown(playerCell),
+    //   getCellLeft(playerCell),
+    //   getCellRight(playerCell),
+    // ];
+
+    const surroundingCells = [];
+
+    switch (player.direction) {
+      case 'UP':
+        surroundingCells.push(getCellUp(playerCell));
+        break;
+      case 'DOWN':
+        surroundingCells.push(getCellDown(playerCell));
+        break;
+      case 'LEFT':
+        surroundingCells.push(getCellLeft(playerCell));
+        break;
+      case 'RIGHT':
+        surroundingCells.push(getCellRight(playerCell));
+        break;
+    }
 
     const actionCells = surroundingCells
       .filter(cell => cellTypes[cell.type].isActionable)
@@ -641,6 +716,8 @@
 
   function performAction(cell, action) {
     log('matching action found for', cell, 'action is', action);
+    cell.state = action.nextState;
+    cell.shouldRedraw = true;
   }
 
   function listenForKeyPress(e) {
