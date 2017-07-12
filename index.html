@@ -15,17 +15,20 @@
   <body>
     <canvas id="map"></canvas>
 
-    <script src="generator.js"></script>
+    <!-- <script src="generator.js"></script> -->
+     <script src="dist/bundle.js"></script> 
     <script>
-      var generator = window.generator || {};
+      var game = new window.dung();
       var canvasElement =document.getElementById('map');
 
       window.__DEV__ = true;
       // window.__DEBUG__ = true;
 
-      generator.attatch(canvasElement);
-      generator.generate();
-      generator.animate(15);
+      game.attatch(canvasElement);
+      // dung.generate();
+      // dung.animate(15);
+
+      console.log(game);
     </script>
   </body>
 </html>

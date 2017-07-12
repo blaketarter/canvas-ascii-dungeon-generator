@@ -192,8 +192,8 @@
     ctx.fillRect(0, 0, width, height);
   }
 
-  function getIndex(row, column, meta) {
-    return column + (row * meta.columns);
+  function getIndex(row, column, columns) {
+    return column + (row * columns);
   }
 
   function getRealX(column, meta) {
@@ -324,7 +324,8 @@
     const yOffset = yCenter - (options.size.height / 2);
 
     mapMeta.xOffset = xOffset;
-    mapMeta.yOffset = yOffset;
+    // mapMeta.yOffset = yOffset;
+    mapMeta.yOffset = 100;
   }
 
   function drawMap(map, meta, ctx) {
