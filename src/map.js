@@ -1,42 +1,9 @@
 import {
   log,
+  calculateMapPlacement,
 } from './utils';
 
-function initMapCell({ row, column, size, columns }) {
-  return {
-    row,
-    column,
-    size,
-    index: getIndex({ row, column, columns}),
-    type: 'GROUND',
-    animationStep: 0,
-    animationStepCounter: 0,
-    isAnimated: false,
-    isOccupied: false,
-    isPlayerOccupied: false,
-    shouldRedraw: false,
-    state: null,
-    hasAnimatedObject: false,
-    animatedObjectType: null,
-  };
-}
-
-function calculateMapPlacement({
-  screenWidth,
-  screenHeight,
-  mapWidth,
-  mapHeight,
-}) {
-  const xCenter = screenWidth / 2;
-  const xOffset = xCenter - (mapWidth / 2);
-  const yCenter = screenWidth / 2;
-  const yOffset = yCenter - (mapHeight / 2);
-
-  return {
-    xOffset,
-    yOffset,
-  };
-}
+import Cell from './cell';
 
 class Map {
   constructor({
@@ -44,12 +11,13 @@ class Map {
     parentWidth,
     mapHeight,
     mapWidth,
+    blockSize,
   }) {
     this.cells = [];
 
     this.meta = {
       blockCount: 0,
-      blockSize: 0,
+      blockSize,
       rows: 0,
       columns: 0,
       xOffset: 0,
@@ -61,27 +29,22 @@ class Map {
     };
   }
 
-  generateCells({
-    height,
-    width,
-    blockSize,
-  }) {
-    const columns = (width / blockSize);
-    const rows = (height / blockSize);
+  generateCells() {
+    const columns = (this.meta.mapWidth / this.meta.blockSize);
+    const rows = (this.meta.mapHeight / this.meta.blockSize);
     const blockCount = rows * columns;
 
-    mapMeta.columns = columns;
-    mapMeta.rows = rows;
-    mapMeta.blockSize = blockSize;
-    mapMeta.blockCount = blockCount;
+    this.meta.columns = columns;
+    this.meta.rows = rows;
+    this.meta.blockCount = blockCount;
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < columns; c++) {
         this.cells.push(
-          initMapCell({
-            r: row,
+          new Cell({
+            row: r,
             column: c,
-            blockSize,
+            blockSize: this.meta.blockSize,
             columns: this.meta.columns,
           })
         );
@@ -92,14 +55,23 @@ class Map {
       screenHeight: this.meta.parentHeight,
       screenWidth: this.meta.parentWidth,
       mapHeight: this.meta.mapHeight,
-      mapWidth: this.mapWidth,
+      mapWidth: this.meta.mapWidth,
     });
 
-    meta.xOffset = offset.xOffset;
-    meta.yOffset = offset.yOffset;
+    this.meta.xOffset = offset.xOffset;
+    this.meta.yOffset = offset.yOffset;
+  }
 
-    log('map initialized', map);
-    log('mapMeta', mapMeta);
+  drawMap({ ctx, player }) {
+    this.cells.forEach(cell => {
+      cell.draw({
+        ctx,
+        blockSize: this.meta.blockSize,
+        xOffset: this.meta.xOffset,
+        yOffset: this.meta.yOffset,
+        player,
+      });
+    });
   }
 }
 

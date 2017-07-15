@@ -36,6 +36,7 @@ class Dung {
       now: null,
     };
     
+    this.player = null;
     this.map = null;
     this.levels = null; // todo, generate levels
   }
@@ -56,14 +57,22 @@ class Dung {
     });
 
     log('attatched!');
-  },
+  }
 
   start(fps) {
     this.map = new Map({
       parentHeight: this.screen.height,
       parentWidth: this.screen.width,
-      mapHeight: this.options.height,
-      mapWidth: this.options.width,
+      mapHeight: this.options.size.height,
+      mapWidth: this.options.size.width,
+      blockSize: this.options.blockSize,
+    });
+
+    this.map.generateCells();
+
+    this.map.drawMap({
+      ctx: this.canvasContext,
+      player: this.player,
     });
   }
 }

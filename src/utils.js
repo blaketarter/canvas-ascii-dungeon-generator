@@ -31,12 +31,29 @@ function getIndex({ row, column, columns }) {
   return column + (row * columns);
 }
 
-function getRealX({ column, meta, xOffset }) {
+function getRealX({ column, blockSize, xOffset }) {
   return (column * blockSize) + xOffset;
 }
 
 function getRealY({ row, blockSize, yOffset }) {
   return (row * blockSize) + yOffset;
+}
+
+function calculateMapPlacement({
+  screenWidth,
+  screenHeight,
+  mapWidth,
+  mapHeight,
+}) {
+  const xCenter = screenWidth / 2;
+  const xOffset = xCenter - (mapWidth / 2);
+  const yCenter = screenWidth / 2;
+  const yOffset = yCenter - (mapHeight / 2);
+
+  return {
+    xOffset,
+    yOffset,
+  };
 }
 
 export {
@@ -48,4 +65,5 @@ export {
   getIndex,
   getRealX,
   getRealY,
+  calculateMapPlacement,
 };
